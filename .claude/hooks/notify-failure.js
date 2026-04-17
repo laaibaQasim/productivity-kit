@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 const fs = require("fs");
-const { execFileSync } = require("child_process");
 const path = require("path");
+const { playSound, notify, shouldNotify } = require("./platform");
 
 function loadConfig() {
   try {
@@ -13,56 +13,11 @@ function loadConfig() {
   }
 }
 
-function readInput() {
-  return fs.readFileSync(0, "utf8");
-}
-
-function getFrontmostApp() {
-  try {
-    return execFileSync(
-      "osascript",
-      [
-        "-e",
-        'tell application "System Events" to get name of first application process whose frontmost is true',
-      ],
-      { encoding: "utf8" },
-    ).trim();
-  } catch {
-    return "";
-  }
-}
-
-function shouldNotify() {
-  const frontmostApp = getFrontmostApp();
-
-  const appsToSuppressFor = [
-    "Cursor",
-    "Terminal",
-    "Visual Studio Code",
-    "Code",
-    "iTerm2",
-    "Warp",
-  ];
-
-  return !appsToSuppressFor.includes(frontmostApp);
-}
-
-function notify(title, message, sound) {
-  try {
-    execFileSync("osascript", [
-      "-e",
-      `display notification ${JSON.stringify(message)} with title ${JSON.stringify(title)}`,
-    ]);
-
-    execFileSync("afplay", [sound]);
-  } catch {}
-}
-
 function main() {
   let input = {};
 
   try {
-    const raw = readInput();
+    const raw = fs.readFileSync(0, "utf8");
     input = raw ? JSON.parse(raw) : {};
   } catch {
     process.stdout.write("{}\n");
@@ -87,8 +42,15 @@ function main() {
     return;
   }
 
-  const soundPath = path.join(__dirname, "../sounds", hookConfig.sound);
-  notify("Claude", "Task failed", soundPath);
+  const soundsDir = config.sounds_directory
+    ? path.resolve(__dirname, "../..", config.sounds_directory)
+    : path.join(__dirname, "../sounds");
+
+  const soundPath = path.join(soundsDir, hookConfig.sound);
+
+  notify("Claude", "Task failed");
+  playSound(soundPath);
+
   process.stdout.write("{}\n");
 }
 
