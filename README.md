@@ -12,12 +12,12 @@ Three hooks fire automatically during Claude sessions:
 | Task failed | `notify-failure.js` | `task-failed.mp3` |
 | Permission needed | `notify-permission.js` | `approval-required.mp3` |
 
-Notifications are suppressed when Cursor, Terminal, VS Code, iTerm2, or Warp is the frontmost app — they only fire when you're away.
+Notifications are suppressed when Cursor, Terminal, VS Code, iTerm2, or Warp is the frontmost app — they only fire when the active window is something else.
 
 ---
 
 <details>
-<summary>How do I disable all hooks?</summary>
+<summary>Disable all hooks</summary>
 
 Set `enabled` to `false` in `.claude/config.json`:
 
@@ -28,7 +28,7 @@ Set `enabled` to `false` in `.claude/config.json`:
 </details>
 
 <details>
-<summary>How do I enable or disable a specific hook?</summary>
+<summary>Enable or disable a specific hook</summary>
 
 Toggle the `enabled` field on any hook in `.claude/config.json`:
 
@@ -45,9 +45,9 @@ Toggle the `enabled` field on any hook in `.claude/config.json`:
 </details>
 
 <details>
-<summary>How do I change a sound?</summary>
+<summary>Change a sound</summary>
 
-Update the `sound` field for the relevant hook and drop your `.mp3` into the sounds directory:
+Update the `sound` field for the relevant hook and drop the `.mp3` into the sounds directory:
 
 ```json
 {
@@ -60,7 +60,7 @@ Update the `sound` field for the relevant hook and drop your `.mp3` into the sou
 </details>
 
 <details>
-<summary>How do I change the sounds directory?</summary>
+<summary>Change the sounds directory</summary>
 
 Update `sounds_directory` in `.claude/config.json` to any absolute or relative path:
 
