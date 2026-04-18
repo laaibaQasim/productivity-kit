@@ -1,122 +1,69 @@
 # ai-dump
 
-Claude hooks that play sounds and show desktop notifications when the agent finishes a task, fails, or needs permission.
+Personal automation for **Claude Code** and **Cursor**: session work logging, optional desktop sounds/notifications on Claude task events, and shared rules.
 
-## Hooks
+## What lives here
 
-Three hooks fire automatically during Claude sessions:
+| Area | Purpose |
+|------|--------|
+| [`.claude/`](.claude/) | Claude Code hooks, config, sounds, skills |
+| [`.cursor/`](.cursor/) | Cursor hooks and project rules |
+| [`work-logs/`](work-logs/) | Daily JSON session logs (default; configurable) |
 
-| Event | Hook file | Default sound |
-|---|---|---|
-| Task completed | `notify-stop.js` | `task-completed.mp3` |
-| Task failed | `notify-failure.js` | `task-failed.mp3` |
-| Permission needed | `notify-permission.js` | `approval-required.mp3` |
+## Documentation
 
-Notifications are suppressed when a dev-focused app is frontmost (for example Cursor, Terminal, VS Code, iTerm2, Warp, common Linux terminals, or Windows Terminal). They only fire when the active window is something else.
+| Doc | Contents |
+|-----|----------|
+| [**Claude hooks**](docs/claude-hooks.md) | `SessionStart` / `SessionEnd`, notify hooks, config, edge cases, security |
+| [**Cursor hooks**](docs/cursor-hooks.md) | `sessionStart` / `afterAgentResponse` / `sessionEnd`, config, edge cases, security |
 
----
+Start with this README; use the two docs above for setup details and behavior.
 
-## Installation
+## Quick use
 
-No npm install — hooks use Node built-ins only.
+1. **Clone or copy** this repo (or copy `.claude/` / `.cursor/` into another project).
+2. **Claude Code**: hooks are wired in [`.claude/settings.json`](.claude/settings.json). Session logging reads [`session_tracking`](docs/claude-hooks.md#configuration) from [`.claude/config.json`](.claude/config.json).
+3. **Cursor**: hooks are listed in [`.cursor/hooks.json`](.cursor/hooks.json). Cursor reads session settings from [`.cursor/config.json`](.cursor/config.json) (see [Cursor hooks doc](docs/cursor-hooks.md#configuration)).
 
-### Project level
+No `npm install` for hooks — they use Node built-ins only.
 
-Applies only to the current project. Place the hooks inside the project's `.claude/` directory:
+## Adding hooks without cluttering the repo
 
-```
-your-project/
-└── .claude/
-    ├── config.json
-    └── hooks/
-        ├── platform.js
-        ├── notify-stop.js
-        ├── notify-failure.js
-        └── notify-permission.js
-```
+- Keep **one concise** [`README.md`](README.md) (this file) and put **depth** in [`docs/claude-hooks.md`](docs/claude-hooks.md) and [`docs/cursor-hooks.md`](docs/cursor-hooks.md).
+- Put **new hook scripts** only under [`.claude/hooks/`](.claude/hooks/) or [`.cursor/hooks/`](.cursor/hooks/); register them in the matching `settings.json` / `hooks.json`.
+- Add a short bullet to the relevant **docs** file when you add or change behavior (edge cases, stdin fields, security).
 
-### Root level
+### Local Git exclude (when you can’t or won’t use `.gitignore`)
 
-Applies to all Claude sessions across every project. Place the hooks inside `~/.claude/`:
+Use **`.git/info/exclude`** for ignores that apply only on **your clone** and are **never committed** (unlike `.gitignore`). That fits `work-logs/` and, if you want the same privacy for tooling files, **`.claude/`** and **`.cursor/`** — for example when you copy hooks/config into a repo that must not list them in a shared `.gitignore`.
 
-```
-~/.claude/
-├── config.json
-└── hooks/
-    ├── platform.js
-    ├── notify-stop.js
-    ├── notify-failure.js
-    └── notify-permission.js
-```
+**Session logs only** — run from the **repository root**; it does nothing if the directory is not a Git work tree:
 
-Project-level config takes precedence over root-level config when both exist.
-
----
-
-## Platform requirements
-
-| OS | Notification | Sound |
-|---|---|---|
-| **macOS** | `osascript` (`display notification`) | `afplay` |
-| **Linux** | `notify-send` (if available) | `mpg123` or `ffplay` (first found) |
-| **Windows** | PowerShell tray balloon | PowerShell `MediaPlayer` |
-
-Frontmost-app detection (for suppression): **macOS** uses AppleScript / System Events; **Linux** uses `xdotool` when installed (otherwise suppression may not apply). **Windows** has no frontmost check; hooks always consider notifying unless you extend the list in `platform.js`.
-
-Set `DEBUG=1` (or any non-empty value) when running Node if you want errors from sound/notification code on **stderr** — normal hook **stdout** stays clean for Claude.
-
----
-
-<details>
-<summary>Disable all hooks</summary>
-
-Set `enabled` to `false` in `.claude/config.json`:
-
-```json
-{ "enabled": false }
-```
-
-</details>
-
-<details>
-<summary>Enable or disable a specific hook</summary>
-
-Toggle the `enabled` field on any hook in `.claude/config.json`:
-
-```json
-{
-  "hooks": {
-    "task_done":        { "enabled": false },
-    "task_failed":      { "enabled": true  },
-    "permission_needed":{ "enabled": true  }
-  }
+```bash
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 && {
+  mkdir -p .git/info
+  f=".git/info/exclude"
+  grep -qxF 'work-logs/' "$f" 2>/dev/null || echo 'work-logs/' >> "$f"
 }
 ```
 
-</details>
+**Same idea for hooks and config directories** (append each path once; adjust the list to match what you keep local):
 
-<details>
-<summary>Change a sound</summary>
-
-Update the `sound` field for the relevant hook and drop the `.mp3` into the sounds directory:
-
-```json
-{
-  "hooks": {
-    "task_done": { "enabled": true, "sound": "my-custom-sound.mp3" }
-  }
+```bash
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 && {
+  mkdir -p .git/info
+  f=".git/info/exclude"
+  for p in work-logs/ .claude/ .cursor/; do
+    grep -qxF "$p" "$f" 2>/dev/null || echo "$p" >> "$f"
+  done
 }
 ```
 
-</details>
+**Notes**
 
-<details>
-<summary>Change the sounds directory</summary>
+- **New/untracked files only:** patterns in `exclude` (and `.gitignore`) stop *untracked* paths from being added. Files **already tracked** by Git stay tracked until you remove them from the index (e.g. `git rm -r --cached .claude` — use with care).
+- **Committed `.gitignore`:** if the team can share ignore rules, a root `.gitignore` entry is often simpler; use `exclude` when you need local-only rules or cannot change committed ignore files.
 
-Update `sounds_directory` in `.claude/config.json` to any absolute or relative path:
+## License
 
-```json
-{ "sounds_directory": "/Users/you/sounds" }
-```
-
-</details>
+See [LICENSE](LICENSE).
