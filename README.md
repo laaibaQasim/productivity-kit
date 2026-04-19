@@ -1,4 +1,4 @@
-# ai-dump
+# productivity-kit
 
 ## Track your AI workflows smarter
 
