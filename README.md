@@ -1,5 +1,11 @@
 # ai-dump
 
+## Track your AI workflows smarter
+
+This project sends real-time voice notifications when your tasks need attention or finish—so you don’t have to keep checking your screen. It also summarizes your sessions to help you write daily standups, track time, and review what actually happened.
+
+The bigger goal: help you spot inefficiencies, improve prompts, and move toward agentic workflows—while understanding which models work best so you save both time and cost.
+
 ## What this repo is
 
 A plug-and-play toolkit for **Claude Code** and **Cursor** that adds notifications and session logging to your workflow.
@@ -71,8 +77,10 @@ Treat hook stdin as trusted only to the extent you trust those tools.
 | Doc | Contents |
 |-----|----------|
 | [Claude hooks](docs/claude-hooks.md) | Config, each hook, edge cases, filesystem scope |
-| [Cursor hooks](docs/cursor-hooks.md) | Config, each hook, edge cases;
+| [Cursor hooks](docs/cursor-hooks.md) | Config, each hook, edge cases, filesystem scope |
 
 ## License
 
 See [LICENSE](LICENSE).
+
+Analysis features are still evolving, so feedback and ideas are welcome. If this is useful, consider starring the repo to follow updates.
