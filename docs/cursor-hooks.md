@@ -1,136 +1,82 @@
 # Cursor hooks
 
-Project hooks are declared in [`.cursor/hooks.json`](../.cursor/hooks.json). Commands run from the **project root**; scripts live under [`.cursor/hooks/`](../.cursor/hooks/).
+## Overview
 
-Cursor passes JSON on **stdin**; your scripts print JSON on **stdout**. Several events are **fire-and-forget** — Cursor does not wait for side effects, and some return values are ignored (see below).
+**Project** hooks live in [`.cursor/hooks.json`](../.cursor/hooks.json); commands run with the **project root** as the working directory. Scripts under [`.cursor/hooks/`](../.cursor/hooks/) import [`.claude/hooks/session-tracker-utils.js`](../.claude/hooks/session-tracker-utils.js) so **logging matches Claude** where possible.
+
+Cursor sends **JSON on stdin**; scripts print **JSON on stdout**. Several events are **fire-and-forget** — do not rely on hooks for mandatory gating.
+
+---
+
+## Supported hooks
+
+| Cursor event | Script | Purpose |
+|--------------|--------|---------|
+| `sessionStart` | [`session-start.js`](../.cursor/hooks/session-start.js) | Open/update session row; same resume/housekeeping as Claude. |
+| `afterAgentResponse` | [`capture-summary.js`](../.cursor/hooks/capture-summary.js) | Append **Summary** bullets from each assistant reply. |
+| `sessionEnd` | [`session-end.js`](../.cursor/hooks/session-end.js) | Close row; prefer captured bullets, else transcript fallback. |
+
+---
+
+## What each hook does
+
+### `sessionStart` (`session-start.js`)
+
+Runs when a **Composer** chat starts. If session logging is enabled, it records the session in the same work log as Claude, tagged for Cursor. Does nothing when logging is turned off.
+
+### `afterAgentResponse` (`capture-summary.js`)
+
+Runs after each **assistant** reply. If the reply includes a **Summary** section (same style as in the [Claude logging doc](claude-hooks.md#logging-behavior)), those lines are saved as bullets on the current session.
+
+### `sessionEnd` (`session-end.js`)
+
+Runs when the chat **ends**. Saves end time and duration, and keeps any summary bullets gathered during the chat (or fills them from the transcript when needed).
+
+---
+
+## Installation
+
+1. Open the repo (or copy [`.cursor/`](../.cursor/) into your project).
+2. Ensure **`node`** is on your `PATH` (commands in [`.cursor/hooks.json`](../.cursor/hooks.json) call `node` or run scripts directly — match your setup).
+3. Confirm [`.cursor/hooks.json`](../.cursor/hooks.json) is present; Cursor reloads it on save (restart Cursor if hooks do not appear).
+4. Merge [`.cursor/config.json`](../.cursor/config.json) **`session_tracking`** as needed.
 
 ---
 
 ## Configuration
 
-Session tracking for Cursor uses [`.cursor/config.json`](../.cursor/config.json). The same keys as Claude’s `session_tracking` are supported (see [Claude hooks – session tracking](claude-hooks.md#session-tracking-session_tracking)), implemented by importing [`.claude/hooks/session-tracker-utils.js`](../.claude/hooks/session-tracker-utils.js).
+Cursor uses **two** project files: one tells the **editor** which hook scripts to run; the other tells those scripts **how to log** sessions.
 
-| File | Role |
-|------|------|
-| [`.cursor/config.json`](../.cursor/config.json) | `session_tracking` only (relative path resolved from project root via shared utils) |
-| [`.cursor/hooks.json`](../.cursor/hooks.json) | Event → command mapping and **timeouts** |
+### [`.cursor/hooks.json`](../.cursor/hooks.json)
 
----
+**What it is:** Cursor’s hook manifest. It lists **which events** run **which commands** (paths to scripts under `.cursor/hooks/`), and optional **timeouts** in seconds so slow steps (for example reading a transcript on session end) do not get cut off.
 
-## Hooks reference
+**Use:** Register or change hooks without editing Cursor’s global settings. If this file is missing or invalid, project hooks from this repo will not run.
 
-### `sessionStart` → `session-start.js`
+### [`.cursor/config.json`](../.cursor/config.json)
 
-**When:** A new Composer conversation is created.
+**What it is:** Settings read by **this repo’s** hook scripts only (not a full Cursor app settings dump). It currently holds a single object, **`session_tracking`**, with the same keys as in [Claude hooks – Configuration](claude-hooks.md#configuration): turn logging on or off, where to store daily JSON (`store_directory`, `store_name_prefix`), and limits (`max_sessions`, `max_bullets`, `stale_session_days`).
 
-**Stdin (documented by Cursor):** `session_id`, `is_background_agent`, `composer_mode` (e.g. `agent`, `ask`, `edit`). **`cwd` and `source` may be absent** (unlike Claude’s `SessionStart`).
-
-**Behavior:**
-
-- If session tracking is disabled → `{}` on stdout.
-- **`cwd`:** Uses `input.cwd` when present, else **`process.cwd()`** (usually the project root for project hooks).
-- **`source`:** Stored on `resume_events` when present; often **null** for Cursor.
-- Same resume / midnight / housekeeping logic as [Claude `session-start`](claude-hooks.md#sessionstart--session-startjs), but rows are tagged `tool: "cursor"`.
-
-**Stdout:** `{}`.  
-Cursor may also support returning `env` / `additional_context` from this hook; these scripts do not set them.
+**Use:** Control **whether** Cursor sessions are written to `work-logs/` and **how large** those files can grow, independently of [`.claude/config.json`](../.claude/config.json).
 
 ---
 
-### `afterAgentResponse` → `capture-summary.js`
+## Logging behavior
 
-**When:** After each full assistant message.
+- **Where / format:** Same daily JSON files as Claude — default **`work-logs/`**, `session-work-log-YYYY-MM-DD.json`, rows tagged `tool: "cursor"`.
+- **Bullets:** Incremental from **`afterAgentResponse`**; **`sessionEnd`** keeps those or fills from **transcript** if needed.
+- **Race:** End hook re-reads the store so late **`afterAgentResponse`** writes are not lost.
+- **Debug:** `DEBUG=1` on stderr; use Cursor’s **Hooks** UI for delivery issues.
 
-**Stdin:** Must include the assistant **`text`**. The hook also expects **`session_id`** to attach bullets to the correct open row.
+## Security
 
-**Behavior:**
-
-- Scans `text` for a **Summary** block (same heading rules as [Claude](claude-hooks.md#summary-heading-formats)).
-- Appends bullets to the open session (capped by `max_bullets`).
-
-**Important:** If your Cursor build only passes `{ "text": "..." }` and **omits `session_id`**, this hook cannot update the store — verify the real payload (e.g. Hooks output channel or temporary logging). A workaround is to pass `session_id` via **`sessionStart` → `env`** (Cursor merges env into later hooks) if needed.
-
-**Stdout:** `{}`.
-
----
-
-### `sessionEnd` → `session-end.js`
-
-**When:** The Composer conversation ends.
-
-**Stdin (typical):** `session_id`, `reason`, `duration_ms`, `is_background_agent`, `final_status`, `error_message`. **`transcript_path` may or may not appear** depending on Cursor version.
-
-**Behavior:**
-
-- Finalizes the open row: `ended_at`, `duration_minutes` computed from **stored `started_at`** and end time (not currently preferring `duration_ms` from stdin — see [Possible improvements](#possible-improvements)).
-- **Summary bullets:** Uses **incremental** bullets from `capture-summary.js` if present; otherwise tries **`transcript_path`** like Claude’s end hook.
-- **Race:** Re-reads the store before write because **`afterAgentResponse` and `sessionEnd` can fire close together**.
-
-**Timeout:** **30 seconds** in `hooks.json` for slow transcript reads.
-
-**Stdout:** `{}` (Cursor may log it but not use it for control flow).
-
----
-
-## Edge cases (important)
-
-These mirror much of the [Claude list](claude-hooks.md#edge-cases-session-tracker), plus Cursor-specific points.
-
-| Situation | Behavior |
-|-----------|----------|
-| **Missing `session_id`** | Start / capture / end skip safely. |
-| **No `session_id` in `afterAgentResponse`** | Capture script no-ops — **confirm payload** in your Cursor version. |
-| **`cwd` omitted** | Falls back to `process.cwd()`. |
-| **`transcript_path` omitted on end** | Relies on bullets from `capture-summary.js`; otherwise summary may be empty. |
-| **`sessionEnd` + `afterAgentResponse` race** | End hook re-reads store before writing to avoid losing incremental bullets. |
-| **Fire-and-forget** | Do not rely on hooks for mandatory gating; they are best-effort for logging. |
-| **Store corruption / caps / stale rows** | Same as shared `session-tracker-utils` (see Claude doc). |
-
-### Possible improvements
-
-- Prefer **`duration_ms`** from `sessionEnd` stdin when present, for parity with Cursor’s clock.
-- Persist **`reason`**, **`error_message`**, **`composer_mode`** if you want richer analytics.
-
----
-
-## Security and filesystem scope
-
-**What the repo controls**
-
-- Hook **code** under [`.cursor/hooks/`](../.cursor/hooks/).
-- **Config** in [`.cursor/config.json`](../.cursor/config.json).
-
-**Writes**
-
-- Same as Claude: daily JSON under **`work-logs/`** (default), **under the project root**, with the same “no escape outside project root” rule for `store_directory`.
-
-**Reads**
-
-- **`transcript_path`** (when provided): read-only, single file from stdin.
-- No broad directory walks beyond the **store directory** for log files (`findStoreFileForSession` lists `*.json` under the configured store).
-
-**Trust model**
-
-- stdin is produced by **Cursor**; same caution as for any hook: only read paths Cursor supplies.
-
----
-
-## Debugging
-
-Use `DEBUG=1` for stderr diagnostics from `.cursor/hooks/*.js`. Check Cursor’s **Hooks** UI / output channel if a hook does not run.
+- **Writes:** Same as Claude — only under **project root** into the configured store (default `work-logs/`).
+- **Reads:** **`transcript_path`** only when provided; listing the store directory is limited to configured **`*.json`** files for session lookup.
+- **Trust:** stdin comes from **Cursor**; treat paths as you trust the app.
 
 ---
 
 ## Related
 
-- [Claude hooks](claude-hooks.md) — shared utilities, Summary formats, store semantics.
-- [`.cursor/rules/`](../.cursor/rules/) — project rules for the agent (not hook scripts).
-
----
-
-## Adding a new Cursor hook
-
-1. Add a script under [`.cursor/hooks/`](../.cursor/hooks/).
-2. Register it in [`.cursor/hooks.json`](../.cursor/hooks.json) under the right event name; set `timeout` (seconds) if the hook can do I/O-heavy work.
-3. Prefer **project hooks** (paths like `.cursor/hooks/foo.js` relative to repo root).
-4. Document stdin/stdout and behavior here after you confirm them in Cursor’s Hooks output / docs.
+- [Claude hooks](claude-hooks.md) — shared session tracker and Claude notify hooks.
+- [`.cursor/rules/`](../.cursor/rules/) — agent rules (not hooks).

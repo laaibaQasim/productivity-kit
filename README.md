@@ -1,53 +1,34 @@
 # ai-dump
 
-Personal automation for **Claude Code** and **Cursor**: session work logging, optional desktop sounds/notifications on Claude task events, and shared rules.
+## What this repo is
 
-## What lives here
+A small **Claude Code** and **Cursor** toolkit you can drop into a project: hook scripts (Node, no extra install), optional session work logs under `work-logs/`, and optional desktop sounds when Claude finishes or needs attention (Cursor has these built-in). Detailed behavior lives in [`docs/`](docs/).
 
-| Area | Purpose |
-|------|--------|
-| [`.claude/`](.claude/) | Claude Code hooks, config, sounds, skills |
-| [`.cursor/`](.cursor/) | Cursor hooks and project rules |
-| [`work-logs/`](work-logs/) | Daily JSON session logs (default; configurable) |
+## What problems it solves
 
-## Documentation
+- **Visibility:** Append-only style logs of **sessions** (start/end, project/branch, **Summary** bullets) so you can see what you were doing across days.
+- **Cursor + Claude parity:** Same session-tracker logic for both tools where it makes sense.
+- **Feedback:** Optional macOS/Linux/Windows notifications and sounds on Claude task events.
+- **Private by default on your machine:** You can keep logs and local tooling out of Git without touching a shared `.gitignore` (see [Quick start](#quick-start)).
 
-| Doc | Contents |
-|-----|----------|
-| [**Claude hooks**](docs/claude-hooks.md) | `SessionStart` / `SessionEnd`, notify hooks, config, edge cases, security |
-| [**Cursor hooks**](docs/cursor-hooks.md) | `sessionStart` / `afterAgentResponse` / `sessionEnd`, config, edge cases, security |
+## Hooks in this repo
 
-Start with this README; use the two docs above for setup details and behavior.
+| Tool | Events | Role |
+|------|--------|------|
+| **Claude Code** | `SessionStart`, `SessionEnd` | Record sessions in daily JSON; read transcript for `**Summary:**` bullets on end. |
+| **Claude Code** | `Stop`, `StopFailure`, `PermissionRequest` | Optional sound + notification. |
+| **Cursor** | `sessionStart`, `sessionEnd` | Same session log model; end can fall back to transcript if bullets missing. |
+| **Cursor** | `afterAgentResponse` | Incremental capture of `**Summary:**` bullets from assistant replies. |
 
-## Quick use
+Scripts live under [`.claude/hooks/`](.claude/hooks/) and [`.cursor/hooks/`](.cursor/hooks/); wiring is in [`.claude/settings.json`](.claude/settings.json) and [`.cursor/hooks.json`](.cursor/hooks.json).
 
-1. **Clone or copy** this repo (or copy `.claude/` / `.cursor/` into another project).
-2. **Claude Code**: hooks are wired in [`.claude/settings.json`](.claude/settings.json). Session logging reads [`session_tracking`](docs/claude-hooks.md#configuration) from [`.claude/config.json`](.claude/config.json).
-3. **Cursor**: hooks are listed in [`.cursor/hooks.json`](.cursor/hooks.json). Cursor reads session settings from [`.cursor/config.json`](.cursor/config.json) (see [Cursor hooks doc](docs/cursor-hooks.md#configuration)).
+## Quick start
 
-No `npm install` for hooks — they use Node built-ins only.
+Copy this repo into your project or system level root folders (~/.claude) and ensure **Node** is on your `PATH` (hooks use Node built-ins only).
 
-## Adding hooks without cluttering the repo
+Session logging is controlled by **`session_tracking.enabled`** in [`.claude/config.json`](.claude/config.json) and [`.cursor/config.json`](.cursor/config.json) (defaults target `work-logs/`). Full options are in the docs below.
 
-- Keep **one concise** [`README.md`](README.md) (this file) and put **depth** in [`docs/claude-hooks.md`](docs/claude-hooks.md) and [`docs/cursor-hooks.md`](docs/cursor-hooks.md).
-- Put **new hook scripts** only under [`.claude/hooks/`](.claude/hooks/) or [`.cursor/hooks/`](.cursor/hooks/); register them in the matching `settings.json` / `hooks.json`.
-- Add a short bullet to the relevant **docs** file when you add or change behavior (edge cases, stdin fields, security).
-
-### Local Git exclude (when you can’t or won’t use `.gitignore`)
-
-Use **`.git/info/exclude`** for ignores that apply only on **your clone** and are **never committed** (unlike `.gitignore`). That fits `work-logs/` and, if you want the same privacy for tooling files, **`.claude/`** and **`.cursor/`** — for example when you copy hooks/config into a repo that must not list them in a shared `.gitignore`.
-
-**Session logs only** — run from the **repository root**; it does nothing if the directory is not a Git work tree:
-
-```bash
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 && {
-  mkdir -p .git/info
-  f=".git/info/exclude"
-  grep -qxF 'work-logs/' "$f" 2>/dev/null || echo 'work-logs/' >> "$f"
-}
-```
-
-**Same idea for hooks and config directories** (append each path once; adjust the list to match what you keep local):
+**Keep logs and local tooling out of Git (no commit to `.gitignore`):** use **`.git/info/exclude`** — local to your clone, not shared. From the **repository root**:
 
 ```bash
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 && {
@@ -59,10 +40,18 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 && {
 }
 ```
 
-**Notes**
+Remove `work-logs/`, `.claude/`, or `.cursor/` from the loop if you only want to exclude some paths. **Exclude** only affects **untracked** files; (see [docs](docs/claude-hooks.md)).
 
-- **New/untracked files only:** patterns in `exclude` (and `.gitignore`) stop *untracked* paths from being added. Files **already tracked** by Git stay tracked until you remove them from the index (e.g. `git rm -r --cached .claude` — use with care).
-- **Committed `.gitignore`:** if the team can share ignore rules, a root `.gitignore` entry is often simpler; use `exclude` when you need local-only rules or cannot change committed ignore files.
+## Security
+
+Hooks **do not** invent paths to read or write: they **write** session JSON only under the **project root** (default `work-logs/`, with a guard against `store_directory` escaping the repo), and **read** transcripts only from paths **Claude Code** or **Cursor** pass on stdin. Treat hook stdin as trusted only as far as you trust those tools.
+
+## Detailed docs
+
+| Doc | Contents |
+|-----|----------|
+| [Claude hooks](docs/claude-hooks.md) | Config, each hook, edge cases, filesystem scope |
+| [Cursor hooks](docs/cursor-hooks.md) | Config, each hook, edge cases, Cursor-specific notes |
 
 ## License
 
