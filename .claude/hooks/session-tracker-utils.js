@@ -161,37 +161,6 @@ function resolveStoreFilePath(config) {
   return resolveStoreFileForToday(config);
 }
 
-/**
- * Find the store file that contains a given session ID.
- * Searches today's file first, then scans other files in the store directory
- * (most recent first) until found.
- */
-function findStoreFileForSession(config, sessionId) {
-  if (!sessionId) return null;
-
-  const todayFile = resolveStoreFileForToday(config);
-  if (sessionExistsInFile(todayFile, sessionId)) return todayFile;
-
-  const dir = resolveStoreDirectory(config);
-  const prefix = getStorePrefix(config);
-  let files;
-  try {
-    files = fs.readdirSync(dir)
-      .filter((f) => f.startsWith(prefix) && f.endsWith(".json") && !f.endsWith(".tmp"))
-      .sort()
-      .reverse();
-  } catch {
-    return null;
-  }
-
-  for (const f of files) {
-    const fp = path.join(dir, f);
-    if (fp === todayFile) continue;
-    if (sessionExistsInFile(fp, sessionId)) return fp;
-  }
-  return null;
-}
-
 function sessionExistsInFile(filePath, sessionId) {
   try {
     const raw = fs.readFileSync(filePath, "utf8");
@@ -728,7 +697,6 @@ module.exports = {
   resolveStoreFilePath,
   resolveStoreFileForToday,
   buildStoreFilePath,
-  findStoreFileForSession,
   todayDateString,
   isSessionTrackingEnabled,
   readStore,

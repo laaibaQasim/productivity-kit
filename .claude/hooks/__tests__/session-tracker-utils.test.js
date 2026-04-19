@@ -504,51 +504,6 @@ describe("resolveStoreFileForToday", () => {
   });
 });
 
-describe("findStoreFileForSession", () => {
-  const repoRoot = path.resolve(__dirname, "../../..");
-  let testLogsDir;
-  beforeEach(() => {
-    testLogsDir = path.join(repoRoot, ".test-work-logs-" + process.pid);
-    fs.mkdirSync(testLogsDir, { recursive: true });
-  });
-  afterEach(() => { rmrf(testLogsDir); });
-
-  it("finds session in an existing daily file", () => {
-    const relDir = path.relative(repoRoot, testLogsDir);
-    const file = path.join(testLogsDir, "session-work-log-2026-04-15.json");
-    fs.writeFileSync(file, JSON.stringify({
-      version: 1,
-      sessions: [{ session_id: "abc-123", started_at: "2026-04-15T10:00:00Z" }],
-    }));
-
-    const config = {
-      session_tracking: {
-        store_directory: relDir,
-        store_name_prefix: "session-work-log",
-      },
-    };
-    const result = utils.findStoreFileForSession(config, "abc-123");
-    assert.equal(result, file);
-  });
-
-  it("returns null when session not found", () => {
-    const relDir = path.relative(repoRoot, testLogsDir);
-    const config = {
-      session_tracking: {
-        store_directory: relDir,
-        store_name_prefix: "session-work-log",
-      },
-    };
-    const result = utils.findStoreFileForSession(config, "nonexistent");
-    assert.equal(result, null);
-  });
-
-  it("returns null for null session ID", () => {
-    const result = utils.findStoreFileForSession({}, null);
-    assert.equal(result, null);
-  });
-});
-
 describe("resolveStoreFilePath (backward compat)", () => {
   it("returns same as resolveStoreFileForToday", () => {
     const config = {

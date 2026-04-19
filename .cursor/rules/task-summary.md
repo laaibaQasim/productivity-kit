@@ -44,3 +44,48 @@ You asked me to add a loading state to the Button component. I updated the compo
 **Summary:**
 You asked me to investigate the build failures. I found that the TypeScript config was missing the `skipLibCheck` flag and updated it, which resolved 3 of the 5 failing type checks.
 ```
+
+---
+
+## Interaction Logging Rule
+
+**When this applies:** Only when **`session_tracking.enabled`** is **`true`** in **`.cursor/config.json`** (or **`.claude/config.json`** when using Claude Code).
+
+For every user request, append a very short structured summary at the end of your response under the heading:
+
+### Session Log
+
+This section must always be included unless the user explicitly asks you not to include it.
+
+The Session Log must contain these fields:
+
+- **User Intent:** A 1-2 sentence summary of what the user asked for.
+- **Prompt Summary:** A very short compressed summary of the user's prompt, including only the essential task, constraints, and expected outcome.
+- **Provided Context:** A short summary of any files, code, logs, screenshots, or pasted content the user supplied. Do not repeat large blocks verbatim. Summarize only what is relevant.
+- **What I Did:** A short summary of the work completed in this response.
+- **Open Issues:** Any missing information, uncertainty, limitations, or unresolved problems.
+- **Next Best Step:** The most useful immediate next action for the user or agent.
+
+Rules for compression:
+- Never repeat the full user prompt unless explicitly requested.
+- Never dump full code or file contents into the Session Log.
+- If the user provides code, summarize it by purpose, affected components, and relevant issue only.
+- If the user provides multiple files, summarize them collectively in one short line unless file-level detail is necessary.
+- Keep the entire Session Log concise and low-noise.
+- Prefer signal over detail.
+- Use plain English.
+- Avoid filler words.
+
+### Example Format
+
+```
+[... response content ...]
+
+### Session Log
+- **User Intent:** Add a loading state to the Button component.
+- **Prompt Summary:** Update Button to show spinner and disable while loading; fix related validation bug.
+- **Provided Context:** Button.tsx and validate.ts snippets provided.
+- **What I Did:** Added `loading` prop to Button, updated validate.ts to handle error edge case.
+- **Open Issues:** No tests updated yet.
+- **Next Best Step:** Add unit tests for the new loading state behavior.
+```

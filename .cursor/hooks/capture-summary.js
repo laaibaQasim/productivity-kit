@@ -11,7 +11,6 @@ const {
   loadTrackerConfig,
   isSessionTrackingEnabled,
   resolveStoreFileForToday,
-  findStoreFileForSession,
   readStore,
   writeStoreAtomic,
   findOpenSessionIndex,
@@ -63,10 +62,8 @@ function main() {
     return;
   }
 
-  // Find the file containing this session (today's or a prior day's)
-  const STORE_PATH =
-    findStoreFileForSession(config, sessionId) ||
-    resolveStoreFileForToday(config);
+  // Always append to today's file (daily view: all activity on a given day goes in that day's file)
+  const STORE_PATH = resolveStoreFileForToday(config);
 
   const store = readStore(STORE_PATH);
   if (!Array.isArray(store.sessions)) {

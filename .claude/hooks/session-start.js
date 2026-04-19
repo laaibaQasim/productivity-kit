@@ -4,7 +4,6 @@ const fs = require("fs");
 const {
   loadTrackerConfig,
   resolveStoreFileForToday,
-  findStoreFileForSession,
   isSessionTrackingEnabled,
   readStore,
   writeStoreAtomic,
@@ -71,53 +70,24 @@ function main() {
     return;
   }
 
-  // Check today's file first for an open session
-  const openIdx = findOpenSessionIndex(store.sessions, sessionId);
-  if (openIdx >= 0) {
-    const row = store.sessions[openIdx];
+  // Check today's file for any existing session (open or closed) with this ID
+  let existingIdx = findOpenSessionIndex(store.sessions, sessionId);
+  if (existingIdx < 0) {
+    existingIdx = findLastSessionIndexById(store.sessions, sessionId);
+  }
+
+  if (existingIdx >= 0) {
+    // Session exists in today's file — record resume event and reopen if closed
+    const row = store.sessions[existingIdx];
     row.resume_events = row.resume_events || [];
     row.resume_events.push({
       at: now,
       source: input.source ?? null,
     });
-    writeStoreAtomic(todayStorePath, store);
-    process.stdout.write("{}\n");
-    return;
-  }
-
-  // Check if session exists in a previous day's file (resume across midnight)
-  const priorFile = findStoreFileForSession(config, sessionId);
-  if (priorFile) {
-    const priorStore = readStore(priorFile);
-    const priorIdx = findLastSessionIndexById(priorStore.sessions, sessionId);
-    if (priorIdx >= 0) {
-      const row = priorStore.sessions[priorIdx];
-      row.resume_events = row.resume_events || [];
-      row.resume_events.push({
-        at: now,
-        source: input.source ?? null,
-      });
-      if (row.ended_at) {
-        row.ended_at = null;
-        row.duration_minutes = null;
-      }
-      writeStoreAtomic(priorFile, priorStore);
-      process.stdout.write("{}\n");
-      return;
+    if (row.ended_at) {
+      row.ended_at = null;
+      row.duration_minutes = null;
     }
-  }
-
-  // Also check today's file for a closed session (resumed same day)
-  const closedIdx = findLastSessionIndexById(store.sessions, sessionId);
-  if (closedIdx >= 0) {
-    const row = store.sessions[closedIdx];
-    row.resume_events = row.resume_events || [];
-    row.resume_events.push({
-      at: now,
-      source: input.source ?? null,
-    });
-    row.ended_at = null;
-    row.duration_minutes = null;
     writeStoreAtomic(todayStorePath, store);
     process.stdout.write("{}\n");
     return;

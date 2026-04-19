@@ -4,7 +4,6 @@ const fs = require("fs");
 const {
   loadTrackerConfig,
   resolveStoreFileForToday,
-  findStoreFileForSession,
   isSessionTrackingEnabled,
   readStore,
   writeStoreAtomic,
@@ -80,10 +79,8 @@ async function main() {
     return;
   }
 
-  // Find which daily file contains this session (may be today or a previous day)
-  const storePath =
-    findStoreFileForSession(config, sessionId) ||
-    resolveStoreFileForToday(config);
+  // Always finalize in today's file (daily view: all activity on a given day goes in that day's file)
+  const storePath = resolveStoreFileForToday(config);
 
   const store = readStore(storePath);
   if (!Array.isArray(store.sessions)) {

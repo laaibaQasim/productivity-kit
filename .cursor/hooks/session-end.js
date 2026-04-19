@@ -12,7 +12,6 @@ const {
   loadTrackerConfig,
   isSessionTrackingEnabled,
   resolveStoreFileForToday,
-  findStoreFileForSession,
   readStore,
   writeStoreAtomic,
   findOpenSessionIndex,
@@ -67,10 +66,8 @@ async function main() {
     return;
   }
 
-  // Find which daily file contains this session
-  const STORE_PATH =
-    findStoreFileForSession(config, sessionId) ||
-    resolveStoreFileForToday(config);
+  // Always finalize in today's file (daily view: all activity on a given day goes in that day's file)
+  const STORE_PATH = resolveStoreFileForToday(config);
 
   // Early check — bail fast if session is already closed
   const store = readStore(STORE_PATH);
