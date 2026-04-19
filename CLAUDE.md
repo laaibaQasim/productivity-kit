@@ -2,7 +2,13 @@
 
 ## Response Summary Requirement
 
-When responding to task-based requests (coding, debugging, feature implementation, etc.):
+**When this applies:** Only when **`session_tracking.enabled`** is **`true`** in **`.claude/config.json`** for this project. If it is **`false`** or the key is missing, **do not** follow the structured Summary / Implementation Details rules below for hook logging—respond normally unless the user asks for a summary.
+
+If unsure, read `.claude/config.json` in the workspace before assuming the format is required.
+
+---
+
+When **`session_tracking.enabled`** is **`true`**, and you are responding to task-based requests (coding, debugging, feature implementation, etc.):
 
 1. **Always include summaries for coding tasks** — no exceptions, regardless of response length
 2. **Skip summaries only for**: non-coding task responses that are 2-3 lines or less

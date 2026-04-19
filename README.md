@@ -2,49 +2,60 @@
 
 ## What this repo is
 
-A small **Claude Code** and **Cursor** toolkit you can drop into a project: hook scripts (Node, no extra install), optional session work logs under `work-logs/`, and optional desktop sounds when Claude finishes or needs attention (Cursor has these built-in). Detailed behavior lives in [`docs/`](docs/).
+A plug-and-play toolkit for **Claude Code** and **Cursor** that adds notifications and session logging to your workflow.
 
-## What problems it solves
+- Get notified when tasks finish, fail, or need input  
+- Track what happens in every session with structured logs  
+- Review past runs to debug issues and improve prompts  
 
-- **Visibility:** Append-only style logs of **sessions** (start/end, project/branch, **Summary** bullets) so you can see what you were doing across days.
-- **Cursor + Claude parity:** Same session-tracker logic for both tools where it makes sense.
-- **Feedback:** Optional macOS/Linux/Windows notifications and sounds on Claude task events.
-- **Private by default on your machine:** You can keep logs and local tooling out of Git without touching a shared `.gitignore` (see [Quick start](#quick-start)).
+Works out of the box with simple Node scripts. See [`docs/`](docs/) for full behavior.
+
+## What this solves
+
+- **Don’t miss important events** — Get notified when tasks finish, fail, or need your input  
+- **Avoid babysitting long runs** — Step away and get alerted when something matters  
+- **Understand failures faster** — Use logs to spot errors, delays, or weak spots  
+- **Improve prompts over time** — Review past sessions to see what worked  
+- **Keep a history of work** — Retain context after sessions end  
+- **Make better decisions** — Use real usage data instead of guesswork  
 
 ## Hooks in this repo
 
 | Tool | Events | Role |
 |------|--------|------|
-| **Claude Code** | `SessionStart`, `SessionEnd` | Record sessions in daily JSON; read transcript for `**Summary:**` bullets on end. |
-| **Claude Code** | `Stop`, `StopFailure`, `PermissionRequest` | Optional sound + notification. |
-| **Cursor** | `sessionStart`, `sessionEnd` | Same session log model; end can fall back to transcript if bullets missing. |
-| **Cursor** | `afterAgentResponse` | Incremental capture of `**Summary:**` bullets from assistant replies. |
+| **Claude Code** | `SessionStart`, `SessionEnd` | Daily JSON session logs; pulls `**Summary:**` bullets from the transcript when a session ends. Works well with project rules that ask for a summary on coding tasks. |
+| **Claude Code** | `Stop`, `StopFailure`, `PermissionRequest` | Desktop notifications when a run completes, fails, or needs approval. |
+| **Cursor** | `sessionStart`, `sessionEnd` | Same session log model as Claude. |
+| **Cursor** | `afterAgentResponse` | Incremental `**Summary:**` bullets from assistant replies. |
 
-Scripts live under [`.claude/hooks/`](.claude/hooks/) and [`.cursor/hooks/`](.cursor/hooks/); wiring is in [`.claude/settings.json`](.claude/settings.json) and [`.cursor/hooks.json`](.cursor/hooks.json).
+Scripts live under [`.claude/hooks/`](.claude/hooks/) and [`.cursor/hooks/`](.cursor/hooks/). Wiring is in [`.claude/settings.json`](.claude/settings.json) and [`.cursor/hooks.json`](.cursor/hooks.json).
 
 ## Quick start
 
-Copy this repo into your project or system level root folders (~/.claude) and ensure **Node** is on your `PATH` (hooks use Node built-ins only).
+Copy this repo into your project, or copy `.claude/` into your user-level config (**`~/.claude/`**). Ensure **Node** is on your `PATH` (hooks use Node built-ins only).
 
-Session logging is controlled by **`session_tracking.enabled`** in [`.claude/config.json`](.claude/config.json) and [`.cursor/config.json`](.cursor/config.json) (defaults target `work-logs/`). Full options are in the docs below.
+### Run the **setup** command
 
-**Keep logs and local tooling out of Git (no commit to `.gitignore`):** use **`.git/info/exclude`** — local to your clone, not shared. From the **repository root**:
+In Cursor, run the project custom command **setup** ([`.cursor/commands/setup.md`](.cursor/commands/setup.md))—for example from the commands menu or by referencing it in chat the way you usually invoke project commands.
 
-```bash
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 && {
-  mkdir -p .git/info
-  f=".git/info/exclude"
-  for p in work-logs/ .claude/ .cursor/; do
-    grep -qxF "$p" "$f" 2>/dev/null || echo "$p" >> "$f"
-  done
-}
-```
+The agent creates `work-logs/`, copies example configs when missing, optionally updates **`.git/info/exclude`**, runs hook tests—but only after you answer whether local configs and logs should be tracked by git, so edits stay explicit and reviewable.
 
-Remove `work-logs/`, `.claude/`, or `.cursor/` from the loop if you only want to exclude some paths. **Exclude** only affects **untracked** files; (see [docs](docs/claude-hooks.md)).
+Session logging is toggled with **`session_tracking.enabled`** in [`.claude/config.json`](.claude/config.json) and [`.cursor/config.json`](.cursor/config.json) (defaults write under `work-logs/`). Full options are in the [detailed docs](#detailed-docs) below.
 
-## Security
+### Keep local files out of Git (manual alternative)
 
-Hooks **do not** invent paths to read or write: they **write** session JSON only under the **project root** (default `work-logs/`, with a guard against `store_directory` escaping the repo), and **read** transcripts only from paths **Claude Code** or **Cursor** pass on stdin. Treat hook stdin as trusted only as far as you trust those tools.
+If you skip **setup** or need extra paths, use **`.git/info/exclude`** so ignores stay on your machine only (no shared `.gitignore`). Append `work-logs/`, `.claude/config.json`, and `.cursor/config.json` as needed—the same entries the **setup** command adds when you choose not to track those files.
+
+### Smoke-test the hooks
+
+Run a short task in **Cursor** and **Claude Code**. To exercise the permission hook, ask the agent to do something that triggers an approval (for example, create a small file in a safe path the tool must confirm).
+
+Hooks do not access arbitrary paths.
+
+- **Write**: only under the project root (default `work-logs/`, with safeguards preventing path escape)  
+- **Read**: only from transcript paths provided by Claude Code or Cursor  
+
+Treat hook stdin as trusted only to the extent you trust those tools.
 
 ## Detailed docs
 
