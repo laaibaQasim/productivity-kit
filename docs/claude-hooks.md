@@ -20,7 +20,7 @@ This document explains **what these hooks do in this repo**. For full event cont
 | Event | Script | What happens |
 |------|--------|-------------|
 | `SessionStart` | `session-start.js` | Starts or resumes a session log entry |
-| `SessionEnd` | `session-end.js` | Finalizes the session and extracts summaries |
+| `SessionEnd` | `session-end.js` | Finalizes the session and extracts `### Session Log` entries from the transcript |
 | `Stop` | `notify-stop.js` | Notifies when a task completes |
 | `StopFailure` | `notify-failure.js` | Notifies on failure |
 | `PermissionRequest` | `notify-permission.js` | Notifies when approval is required |
@@ -46,9 +46,9 @@ Triggered when a session ends.
 
 - Marks session as completed (`ended_at`, duration)
 - Reads the transcript via `transcript_path`
-- Extracts `Summary` sections into `summary_bullets`
+- Extracts every `### Session Log` block from assistant turns into **`session_logs`** (each entry includes `captured_at` plus the six structured fields)
 
-This is where session insight is finalized.
+There is **no** separate `capture-summary` hook for Claude Code in this repo; logging is finalized here unless you add one.
 
 ---
 
@@ -110,8 +110,9 @@ These hooks (`Stop`, `StopFailure`, `PermissionRequest`) provide desktop notific
 | `enabled` | Enables/disables logging |
 | `store_directory` | Where logs are stored (default `work-logs/`) |
 | `max_sessions` | Max completed sessions retained |
-| `max_bullets` | Max summary bullets stored |
+| `max_bullets` | Reserved / legacy (summary-bullet helpers in utils; session logging uses `session_logs`) |
 | `stale_session_days` | Auto-close inactive sessions |
+| `temp_session_id_log` | Optional debug logging for session IDs (see config comments if present) |
 
 ---
 
@@ -125,8 +126,10 @@ Each session includes:
 - timestamps (`started_at`, `ended_at`)
 - duration
 - project + branch
-- extracted `summary_bullets`
+- **`session_logs`**: array of `{ captured_at, user_intent, prompt_summary, provided_context, what_i_did, open_issues, next_best_step }` (fields present when parsed)
 - optional `resume_events`
+
+Older files may still show legacy `summary_bullets`; new sessions use `session_logs` only.
 
 ---
 
@@ -141,8 +144,19 @@ Each session includes:
       "started_at": "...",
       "ended_at": "...",
       "duration_minutes": 30,
-      "summary_bullets": ["..."],
+      "session_logs": [
+        {
+          "captured_at": "2026-04-19T12:00:00.000Z",
+          "user_intent": "Fix the login bug.",
+          "prompt_summary": "Reproduce and patch auth flow.",
+          "provided_context": "Error logs pasted.",
+          "what_i_did": "Updated validateSession().",
+          "open_issues": "None.",
+          "next_best_step": "Add an integration test."
+        }
+      ],
       "resume_events": []
     }
   ]
 }
+```

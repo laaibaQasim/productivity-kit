@@ -640,6 +640,86 @@ function summaryBodyToBullets(body) {
   return out;
 }
 
+// =============================================================================
+// Session Log extraction (structured fields)
+// =============================================================================
+
+const SESSION_LOG_FIELDS = {
+  "user intent": "user_intent",
+  "prompt summary": "prompt_summary",
+  "provided context": "provided_context",
+  "what i did": "what_i_did",
+  "open issues": "open_issues",
+  "next best step": "next_best_step",
+};
+
+function isSessionLogHeadingLine(trimmed) {
+  return (
+    /^#{1,6}\s*Session\s+Log\b/i.test(trimmed) ||
+    /^\*\*\s*Session\s+Log\s*\*\*/i.test(trimmed)
+  );
+}
+
+/**
+ * Extracts structured Session Log fields from response text.
+ * Looks for a `### Session Log` heading, then parses `- **Field:** value` lines.
+ * Returns an object with snake_case keys, or null if no Session Log found.
+ */
+function extractSessionLog(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  let i = 0;
+  let found = false;
+
+  for (; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (isSessionLogHeadingLine(t)) {
+      i++;
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) return null;
+
+  const result = {};
+  const headingLevel = 3;
+
+  for (; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (!t) continue;
+
+    const hl = markdownHeadingLevel(t);
+    if (hl > 0 && hl <= headingLevel && !isSessionLogHeadingLine(t)) break;
+
+    // Match: - **Field Name:** value  OR  **Field Name:** value
+    const m = t.match(/^[-*•]?\s*\*\*([^*]+?):\*\*\s*(.*)/);
+    if (m) {
+      const label = m[1].trim().toLowerCase();
+      const value = m[2].trim();
+      const key = SESSION_LOG_FIELDS[label];
+      if (key && value) result[key] = value;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+/**
+ * Scans all assistant turns for Session Log blocks.
+ * Returns an array of raw log objects (one per turn that has a Session Log),
+ * oldest-to-newest. Timestamps are added by the caller. Returns null if none found.
+ */
+function tryExtractSessionLog(turns) {
+  if (!turns || !turns.length) return null;
+  const logs = [];
+  for (const turn of turns) {
+    if (turn.role !== "assistant") continue;
+    const log = extractSessionLog(turn.text);
+    if (log) logs.push(log);
+  }
+  return logs.length > 0 ? logs : null;
+}
+
 /**
  * Scans all assistant messages (oldest to newest), collecting bullets from every
  * message that contains a Summary section. Returns the combined array, or null.
@@ -715,4 +795,8 @@ module.exports = {
   parseSummaryHeadingLine,
   extractBodyAfterSummaryHeading,
   summaryBodyToBullets,
+  SESSION_LOG_FIELDS,
+  isSessionLogHeadingLine,
+  extractSessionLog,
+  tryExtractSessionLog,
 };

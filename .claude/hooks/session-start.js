@@ -103,7 +103,7 @@ function main() {
     branch_name: getBranchName(cwd),
     ended_at: null,
     duration_minutes: null,
-    summary_bullets: null,
+    session_logs: [],
   });
 
   writeStoreAtomic(todayStorePath, store);

@@ -412,7 +412,140 @@ describe("tryExtractSummaryHeadingBullets", () => {
 });
 
 // =============================================================================
-// E. Title derivation
+// E. Session Log extraction
+// =============================================================================
+describe("extractSessionLog", () => {
+  const sampleLog = [
+    "### Session Log",
+    "- **User Intent:** Add a loading state to the Button component.",
+    "- **Prompt Summary:** Update Button to show spinner and disable while loading.",
+    "- **Provided Context:** Button.tsx and validate.ts snippets provided.",
+    "- **What I Did:** Added `loading` prop to Button, updated validate.ts.",
+    "- **Open Issues:** No tests updated yet.",
+    "- **Next Best Step:** Add unit tests for the new loading state behavior.",
+  ].join("\n");
+
+  it("extracts all six fields", () => {
+    const log = utils.extractSessionLog(sampleLog);
+    assert.ok(log, "should return an object");
+    assert.equal(log.user_intent, "Add a loading state to the Button component.");
+    assert.equal(log.prompt_summary, "Update Button to show spinner and disable while loading.");
+    assert.equal(log.provided_context, "Button.tsx and validate.ts snippets provided.");
+    assert.equal(log.what_i_did, "Added `loading` prop to Button, updated validate.ts.");
+    assert.equal(log.open_issues, "No tests updated yet.");
+    assert.equal(log.next_best_step, "Add unit tests for the new loading state behavior.");
+  });
+
+  it("returns null when no Session Log heading present", () => {
+    const log = utils.extractSessionLog("## Summary\nSome text.");
+    assert.equal(log, null);
+  });
+
+  it("returns null for empty/null input", () => {
+    assert.equal(utils.extractSessionLog(""), null);
+    assert.equal(utils.extractSessionLog(null), null);
+  });
+
+  it("stops at next same-or-higher level heading", () => {
+    const text = [
+      "### Session Log",
+      "- **User Intent:** Do the thing.",
+      "## Next Section",
+      "- **Prompt Summary:** Should not be captured.",
+    ].join("\n");
+    const log = utils.extractSessionLog(text);
+    assert.ok(log);
+    assert.equal(log.user_intent, "Do the thing.");
+    assert.equal(log.prompt_summary, undefined);
+  });
+
+  it("handles response text with content before the Session Log block", () => {
+    const text = [
+      "Here is my full response with code and explanation.",
+      "",
+      "**Implementation Details:**",
+      "- Updated Button.tsx",
+      "",
+      "**Summary:**",
+      "You asked me to add a loading state.",
+      "",
+      "### Session Log",
+      "- **User Intent:** Add loading state.",
+      "- **What I Did:** Added prop.",
+    ].join("\n");
+    const log = utils.extractSessionLog(text);
+    assert.ok(log);
+    assert.equal(log.user_intent, "Add loading state.");
+    assert.equal(log.what_i_did, "Added prop.");
+  });
+
+  it("returns null when heading found but no recognized fields", () => {
+    const log = utils.extractSessionLog("### Session Log\nSome random text with no fields.");
+    assert.equal(log, null);
+  });
+});
+
+describe("tryExtractSessionLog", () => {
+  it("returns null for empty turns", () => {
+    assert.equal(utils.tryExtractSessionLog([]), null);
+    assert.equal(utils.tryExtractSessionLog(null), null);
+  });
+
+  it("extracts a single Session Log as a one-element array", () => {
+    const turns = [
+      {
+        role: "assistant",
+        text: "### Session Log\n- **User Intent:** Fix the bug.\n- **What I Did:** Fixed it.",
+      },
+    ];
+    const logs = utils.tryExtractSessionLog(turns);
+    assert.ok(Array.isArray(logs), "should return an array");
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].user_intent, "Fix the bug.");
+    assert.equal(logs[0].what_i_did, "Fixed it.");
+  });
+
+  it("returns one entry per assistant turn that has a Session Log", () => {
+    const turns = [
+      {
+        role: "assistant",
+        text: "### Session Log\n- **User Intent:** First intent.\n- **Open Issues:** Some issue.",
+      },
+      { role: "user", text: "Thanks!" },
+      {
+        role: "assistant",
+        text: "### Session Log\n- **User Intent:** Second intent.\n- **Next Best Step:** Deploy.",
+      },
+    ];
+    const logs = utils.tryExtractSessionLog(turns);
+    assert.ok(Array.isArray(logs));
+    assert.equal(logs.length, 2, "should have one entry per assistant turn with a Session Log");
+    assert.equal(logs[0].user_intent, "First intent.");
+    assert.equal(logs[0].open_issues, "Some issue.");
+    assert.equal(logs[1].user_intent, "Second intent.");
+    assert.equal(logs[1].next_best_step, "Deploy.");
+  });
+
+  it("ignores user turns", () => {
+    const turns = [
+      {
+        role: "user",
+        text: "### Session Log\n- **User Intent:** Should be ignored.",
+      },
+    ];
+    assert.equal(utils.tryExtractSessionLog(turns), null);
+  });
+
+  it("returns null when no turns have a Session Log", () => {
+    const turns = [
+      { role: "assistant", text: "**Summary:**\nDid the thing." },
+    ];
+    assert.equal(utils.tryExtractSessionLog(turns), null);
+  });
+});
+
+// =============================================================================
+// F. Title derivation
 // =============================================================================
 describe("deriveTitleFromSummaryBullets", () => {
   it("uses first bullet as title", () => {
@@ -434,7 +567,7 @@ describe("deriveTitleFromSummaryBullets", () => {
 });
 
 // =============================================================================
-// F. Path resolution — daily file scheme
+// G. Path resolution — daily file scheme
 // =============================================================================
 describe("todayDateString", () => {
   it("returns YYYY-MM-DD format", () => {
@@ -520,7 +653,7 @@ describe("resolveStoreFilePath (backward compat)", () => {
 });
 
 // =============================================================================
-// G. Misc edge cases
+// H. Misc edge cases
 // =============================================================================
 describe("buildChunks", () => {
   it("handles zero duration", () => {

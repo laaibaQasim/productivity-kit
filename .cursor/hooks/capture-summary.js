@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Fires on afterAgentResponse. Scans the agent reply for a **Summary:** block
- * and, if found, appends bullets to the open session record.
+ * Fires on afterAgentResponse. Scans the agent reply for a ### Session Log block
+ * and, if found, appends a timestamped entry to session_logs on the open session record.
  */
 
 const path = require("path");
@@ -14,9 +14,11 @@ const {
   readStore,
   writeStoreAtomic,
   findOpenSessionIndex,
-  extractBodyAfterSummaryHeading,
-  summaryBodyToBullets,
-  getMaxBullets,
+  findLastSessionIndexById,
+  extractSessionLog,
+  getBranchName,
+  getProjectName,
+  resolveProjectPath,
 } = require("../../.claude/hooks/session-tracker-utils");
 
 function readStdinJson() {
@@ -50,43 +52,44 @@ function main() {
     return;
   }
 
-  const body = extractBodyAfterSummaryHeading(responseText);
-  if (!body) {
+  const sessionLog = extractSessionLog(responseText);
+  if (!sessionLog) {
     process.stdout.write("{}\n");
     return;
   }
 
-  const bullets = summaryBodyToBullets(body);
-  if (!bullets.length) {
-    process.stdout.write("{}\n");
-    return;
-  }
-
-  // Always append to today's file (daily view: all activity on a given day goes in that day's file)
   const STORE_PATH = resolveStoreFileForToday(config);
-
   const store = readStore(STORE_PATH);
-  if (!Array.isArray(store.sessions)) {
-    process.stdout.write("{}\n");
-    return;
-  }
+  if (!Array.isArray(store.sessions)) store.sessions = [];
 
-  const idx = findOpenSessionIndex(store.sessions, sessionId);
+  let idx = findOpenSessionIndex(store.sessions, sessionId);
   if (idx < 0) {
-    if (process.env.DEBUG) {
-      process.stderr.write(
-        `[cursor:capture-summary] no open session for session_id=${sessionId}\n`,
-      );
+    idx = findLastSessionIndexById(store.sessions, sessionId);
+    if (idx >= 0) {
+      store.sessions[idx].ended_at = null;
+      store.sessions[idx].duration_minutes = null;
     }
-    process.stdout.write("{}\n");
-    return;
+  }
+  if (idx < 0) {
+    const cwd = process.cwd();
+    store.sessions.push({
+      session_id: sessionId,
+      tool: "cursor",
+      started_at: new Date().toISOString(),
+      project_name: getProjectName(cwd),
+      project_path: resolveProjectPath(cwd),
+      branch_name: getBranchName(cwd),
+      ended_at: null,
+      duration_minutes: null,
+      session_logs: [],
+    });
+    idx = store.sessions.length - 1;
   }
 
   const row = store.sessions[idx];
 
-  const prior = Array.isArray(row.summary_bullets) ? row.summary_bullets : [];
-  const combined = [...prior, ...bullets];
-  row.summary_bullets = combined.slice(-getMaxBullets(config));
+  const entry = { captured_at: new Date().toISOString(), ...sessionLog };
+  row.session_logs = Array.isArray(row.session_logs) ? [...row.session_logs, entry] : [entry];
 
   writeStoreAtomic(STORE_PATH, store);
   process.stdout.write("{}\n");

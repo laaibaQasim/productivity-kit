@@ -5,7 +5,7 @@
 A plug-and-play toolkit for **Claude Code** and **Cursor** that adds notifications and session logging to your workflow.
 
 - Get notified when tasks finish, fail, or need input  
-- Track what happens in every session with structured logs  
+- Track what happens in every session with structured logs (`session_logs`)  
 - Review past runs to debug issues and improve prompts  
 
 Works out of the box with simple Node scripts. See [`docs/`](docs/) for full behavior.
@@ -23,12 +23,21 @@ Works out of the box with simple Node scripts. See [`docs/`](docs/) for full beh
 
 | Tool | Events | Role |
 |------|--------|------|
-| **Claude Code** | `SessionStart`, `SessionEnd` | Daily JSON session logs; pulls `**Summary:**` bullets from the transcript when a session ends. Works well with project rules that ask for a summary on coding tasks. |
+| **Claude Code** | `SessionStart`, `SessionEnd` | Daily JSON session logs. On end, scans the transcript for `### Session Log` blocks and writes `session_logs`. Works with project rules that ask for a `### Session Log` (and optional `**Summary:**`) on coding tasks. |
 | **Claude Code** | `Stop`, `StopFailure`, `PermissionRequest` | Desktop notifications when a run completes, fails, or needs approval. |
-| **Cursor** | `sessionStart`, `sessionEnd` | Same session log model as Claude. |
-| **Cursor** | `afterAgentResponse` | Incremental `**Summary:**` bullets from assistant replies. |
+| **Cursor** | `sessionStart`, `sessionEnd` | Same session log model as Claude Code (finalize + transcript fallback). |
+| **Cursor** | `afterAgentResponse` | Runs `capture-summary.js`: parses each assistant reply for `### Session Log` and **appends** a timestamped entry to `session_logs` while the session is open. |
 
 Scripts live under [`.claude/hooks/`](.claude/hooks/) and [`.cursor/hooks/`](.cursor/hooks/). Wiring is in [`.claude/settings.json`](.claude/settings.json) and [`.cursor/hooks.json`](.cursor/hooks.json).
+
+### What gets logged
+
+When session tracking is enabled, each session row stores **`session_logs`**: an array of objects, one per captured reply, each with:
+
+- **`captured_at`** — ISO timestamp when the entry was written  
+- **`user_intent`**, **`prompt_summary`**, **`provided_context`**, **`what_i_did`**, **`open_issues`**, **`next_best_step`** (see project rules in `CLAUDE.md` / `.cursor/rules/task-summary.md`)
+
+Older daily files may still contain legacy `summary_bullets`; new sessions use `session_logs` only.
 
 ## Quick start
 
@@ -62,7 +71,7 @@ Treat hook stdin as trusted only to the extent you trust those tools.
 | Doc | Contents |
 |-----|----------|
 | [Claude hooks](docs/claude-hooks.md) | Config, each hook, edge cases, filesystem scope |
-| [Cursor hooks](docs/cursor-hooks.md) | Config, each hook, edge cases, Cursor-specific notes |
+| [Cursor hooks](docs/cursor-hooks.md) | Config, each hook, edge cases;
 
 ## License
 

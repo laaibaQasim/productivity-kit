@@ -7,9 +7,9 @@ const {
   isSessionTrackingEnabled,
   readStore,
   writeStoreAtomic,
-  findOpenSessionIndex,
+  findLastSessionIndexById,
   loadConversationTurns,
-  tryExtractSummaryHeadingBullets,
+  tryExtractSessionLog,
 } = require("./session-tracker-utils");
 
 function readStdinJson() {
@@ -42,16 +42,15 @@ function computeDuration(startedAt, endedAt) {
 /**
  * Finalize a session row with all available data and persist it.
  * Re-reads the store to avoid clobbering concurrent writes.
- * The transcript is the source of truth — bullets are replaced, not merged.
  */
 function finalizeSession(storePath, sessionId, updates) {
   const freshStore = readStore(storePath);
   if (!Array.isArray(freshStore.sessions)) freshStore.sessions = [];
 
-  const freshIdx = findOpenSessionIndex(freshStore.sessions, sessionId);
+  const freshIdx = findLastSessionIndexById(freshStore.sessions, sessionId);
   if (freshIdx < 0) {
     process.stderr.write(
-      `[session-end] session ${sessionId} disappeared from store before finalize; ` +
+      `[session-end] session ${sessionId} not found in store before finalize; ` +
         "saving as new record.\n",
     );
     freshStore.sessions.push({ session_id: sessionId, ...updates });
@@ -88,11 +87,11 @@ async function main() {
     return;
   }
 
-  const idx = findOpenSessionIndex(store.sessions, sessionId);
+  const idx = findLastSessionIndexById(store.sessions, sessionId);
   if (idx < 0) {
     if (process.env.DEBUG) {
       process.stderr.write(
-        `[session-end] no open session for session_id=${sessionId}\n`,
+        `[session-end] no session for session_id=${sessionId}\n`,
       );
     }
     process.stdout.write("{}\n");
@@ -103,29 +102,31 @@ async function main() {
   const totalDuration = computeDuration(row.started_at, endedAt);
 
   const transcriptPath = input.transcript_path || null;
-  let summaryBullets = [];
+  let sessionLogs = null;
 
   try {
     const parsed = await loadConversationTurns(transcriptPath);
-    summaryBullets = tryExtractSummaryHeadingBullets(parsed.turns) || [];
+    const found = tryExtractSessionLog(parsed.turns);
+    if (found && found.length) {
+      const now = new Date().toISOString();
+      sessionLogs = found.map((log) => ({ captured_at: now, ...log }));
+    }
   } catch (err) {
     process.stderr.write(
       `[session log] Could not read transcript (${err.message}); saving session with minimal data.\n`,
     );
   }
 
-  if (!summaryBullets.length && process.env.DEBUG) {
+  if (!sessionLogs && process.env.DEBUG) {
     process.stderr.write(
-      "[session log] No Summary section found in assistant messages.\n",
+      "[session log] No Session Log section found in assistant messages.\n",
     );
   }
-
-  const hasSummary = summaryBullets.length > 0;
 
   finalizeSession(storePath, sessionId, {
     ended_at: endedAt,
     duration_minutes: totalDuration,
-    summary_bullets: hasSummary ? summaryBullets : null,
+    session_logs: sessionLogs,
   });
 
   process.stdout.write("{}\n");
