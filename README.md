@@ -58,6 +58,39 @@ When session tracking is enabled, each session row stores **`session_logs`**: an
 }
 ```
 
+## Commands
+
+This repo ships two Cursor project commands (in [`.cursor/commands/`](.cursor/commands/)):
+
+| Command | File | What it does |
+|---------|------|-------------|
+| **setup** | [`setup.md`](.cursor/commands/setup.md) | One-time setup: creates `work-logs/`, copies example configs, updates `.git/info/exclude`, runs hook tests. |
+| **/logger** | [`logger.md`](.cursor/commands/logger.md) | Reads your session log for a given date, groups entries into 4–5 major tasks with time estimates, and outputs a standup-ready daily summary. |
+
+### /logger — daily work summary
+
+Run **/logger** in Cursor chat at any point during or at the end of your day. It will:
+
+- Parse the daily `session-work-log-YYYY-MM-DD.json` for a date you choose (defaults to today)
+- Cluster related log entries into major tasks, ignoring noise and trivial retries
+- Estimate time per task using `captured_at` timestamps, deduplicating overlapping Claude + Cursor sessions
+- Output a clean summary in this shape:
+
+```
+## Daily Log — 2026-04-19
+
+**Total active time:** 8h 9m
+
+### Major Tasks
+1. **Session hook refactoring** — ~50 min
+   Summary: Simplified session lookup and centralized shared utilities...
+
+### Other minor work
+- Re-read rules file to confirm session tracking was enabled
+```
+
+The output is human-readable and ready to paste.
+
 ## Quick start
 
 1. **Copy** this repo into your project, or copy **`.claude/`** into your user-level config (**`~/.claude/`**).

@@ -1,3 +1,4 @@
+Setup this project.
 ---
 description: >-
   Initialize ai-dump: create work-logs, copy example configs, optional
