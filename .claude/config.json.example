@@ -4,7 +4,7 @@
   "sounds_directory": ".claude/sounds",
 
   "session_tracking": {
-    "enabled": false,
+    "enabled": true,
     "store_directory": "work-logs",
     "store_name_prefix": "session-work-log",
     "stale_session_days": 7
