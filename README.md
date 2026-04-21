@@ -113,9 +113,22 @@ To exercise the permission hook, ask the agent to do something that requires app
 
 **Filesystem scope:** hooks **write** only under the project root (default `work-logs/`, with path safeguards) and **read** only transcript paths supplied by Claude Code or Cursor. Treat hook stdin as trusted only to the extent you trust those tools.
 
+## Log analysis
+
+The [`log-analysis/`](log-analysis/) module turns your `work-logs/` files into actionable insights. It runs four LLM passes over your session logs — prompt quality, model cost, reusable skills, and durable rules — then synthesizes them into a single report.
+
+Run `/setup-analysis` in Cursor to install dependencies and configure your API key, then:
+
+```bash
+python log-analysis/log_analysis.py prepare
+python log-analysis/log_analysis.py run-all --out-dir analysis
+```
+
+Full setup and command reference: [log-analysis/README.md](log-analysis/README.md)
+
 ## Vision
 
-Longer term, this kit is meant to help you spot inefficiencies, tighten prompts, and move toward more agentic workflows—while building intuition for which models and patterns save time and cost. Deeper analysis is still evolving.
+Longer term, this kit is meant to help you spot inefficiencies, tighten prompts, and move toward more agentic workflows—while building intuition for which models and patterns save time and cost.
 
 ## Detailed docs
 

@@ -4,7 +4,7 @@
 
 **When this applies:** Only when **`session_tracking.enabled`** is **`true`** in **`.claude/config.json`** for this project. If it is **`false`** or the key is missing, **do not** follow the structured Summary / Implementation Details rules below for hook logging—respond normally unless the user asks for a summary.
 
-If unsure, read `.claude/config.json` in the workspace before assuming the format is required.
+If unsure, read `.claude/config.json` in the workspace before assuming the format is required. If the project-level `.claude/config.json` does not exist, fall back to `~/.claude/config.json` (system-level).
 
 ---
 

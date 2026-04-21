@@ -6,7 +6,7 @@
 
 If **`session_tracking.enabled`** is **`false`** or unset, **do not** require the structured `**Summary:**` / Implementation Details format for this project—answer in a normal, concise way unless the user asks for a summary.
 
-If unsure, read `.cursor/config.json` (and `.claude/config.json` when using Claude Code) before applying the rules below.
+If unsure, read `.cursor/config.json` (and `.claude/config.json` when using Claude Code) before applying the rules below. If the project-level config does not exist, fall back to `~/.cursor/config.json` (and `~/.claude/config.json` for Claude Code) at the system level.
 
 ---
 
