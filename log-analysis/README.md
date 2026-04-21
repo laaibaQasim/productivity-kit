@@ -1,24 +1,53 @@
 # log-analysis
 
-A Python pipeline that reads your `work-logs/*.json` session files and runs them through four LLM analysis passes using the Gemini API, then synthesizes the results into a single final report.
+A Python pipeline that reads your `work-logs/*.json` session files and runs them through four LLM analysis passes using the Gemini API, then synthesizes the results into a single prioritized report.
 
-## What it does
+---
 
-1. **Prepare** — flattens all session JSON files into a normalized JSONL/CSV for batch processing
-2. **Pass 1 — Prompt audit** — finds recurring ambiguity patterns in how you prompt the AI
-3. **Pass 2 — Cost/model** — flags tasks where a cheaper model tier likely would have sufficed
-4. **Pass 3 — Skills** — clusters repeated tasks that could become reusable scripts or prompt templates
-5. **Pass 4 — Rules** — extracts durable rules and recurring AI mistakes suitable for `.cursorrules`
-6. **Synthesize** — merges all pass outputs into one prioritized `final_report.json`
+## Table of Contents
+
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [Usage](#usage)
+- [CLI Reference](#cli-reference)
+- [Output Structure](#output-structure)
+- [Rate Limits](#rate-limits)
+- [Architecture](#architecture)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Features
+
+- **Multi-pass analysis** — four specialized LLM passes extract different insight categories
+- **Resume-capable** — interrupted runs pick up where they left off
+- **Dry-run mode** — preview token estimates and batch sizes without making API calls
+- **Built-in rate limiting** — sliding-window limiter respects Gemini free-tier quotas automatically
+- **Atomic writes** — temp file + rename strategy prevents corrupt output
+- **Chunked synthesis** — handles large payloads by splitting across multiple API calls
+
+---
 
 ## Prerequisites
 
 - Python 3.9+
 - A [Gemini API key](https://aistudio.google.com/app/apikey) (free tier works)
 
-## Setup
+---
 
-Run the `/setup-analysis` command in Cursor chat, or do it manually:
+## Getting Started
+
+<details>
+<summary><strong>Option A: Automated setup</strong></summary>
+
+Run the `/setup-analysis` command in Cursor chat. It installs dependencies, creates the `.env` file, and configures git exclusions for you.
+
+</details>
+
+<details>
+<summary><strong>Option B: Manual setup</strong></summary>
 
 **1. Install dependencies**
 
@@ -28,41 +57,63 @@ pip install -r log-analysis/requirements.txt
 
 **2. Set your API key**
 
-Create a `.env` file in the project root (if it doesn't exist) and add:
+Create a `.env` file in the project root (if one doesn't exist) and add:
 
-```
+```env
 GEMINI_API_KEY=your_key_here
 ```
 
-**3. Keep output out of git**
-
-Add the output folder to your local git exclude:
+**3. Exclude output from git**
 
 ```bash
 echo "analysis/" >> .git/info/exclude
 ```
 
-> The `setup-analysis` command does steps 2 and 3 for you automatically.
+</details>
 
-## Running the pipeline
+---
 
-From the **project root**, run `prepare` first (required once per log batch), then `run-all`:
+## Usage
+
+All commands are run from the **project root**.
+
+### Quick start
 
 ```bash
-# Flatten logs into analysis-ready files
+# 1. Flatten logs into analysis-ready files (required once per log batch)
 python log-analysis/log_analysis.py prepare
 
-# Run all passes and generate the final report
+# 2. Run all passes and generate the final report
 python log-analysis/log_analysis.py run-all --out-dir analysis
-
-# Same with verbose logging
-python log-analysis/log_analysis.py --verbose run-all --out-dir analysis
-
-# Dry run — previews token estimates with no API calls
-python log-analysis/log_analysis.py run-all --out-dir analysis --dry-run
 ```
 
-## All commands
+<details>
+<summary><strong>More examples</strong></summary>
+
+```bash
+# Verbose logging
+python log-analysis/log_analysis.py --verbose run-all --out-dir analysis
+
+# Dry run — preview token estimates, no API calls
+python log-analysis/log_analysis.py run-all --out-dir analysis --dry-run
+
+# Run a single pass
+python log-analysis/log_analysis.py run-pass pass1_prompt_audit --out-dir analysis
+
+# Re-run synthesis over existing pass outputs
+python log-analysis/log_analysis.py synthesize --out-dir analysis
+
+# Inspect pipeline progress
+python log-analysis/log_analysis.py inspect --out-dir analysis
+```
+
+</details>
+
+---
+
+## CLI Reference
+
+### Commands
 
 | Command | Description |
 |---------|-------------|
@@ -70,15 +121,19 @@ python log-analysis/log_analysis.py run-all --out-dir analysis --dry-run
 | `run-all` | Run all four passes and synthesize |
 | `run-pass <pass>` | Run one pass (`pass1_prompt_audit`, `pass2_cost`, `pass3_skills`, `pass4_rules`) |
 | `synthesize` | Re-run synthesis over existing pass outputs |
-| `inspect` | Show how many batch files exist vs. expected for each pass |
+| `inspect` | Show batch file counts vs. expected for each pass |
 
-### Global flags
+<details>
+<summary><strong>Global flags</strong></summary>
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--verbose` | off | Enable debug-level logging |
 
-### `run-all` / `run-pass` flags
+</details>
+
+<details>
+<summary><strong><code>run-all</code> / <code>run-pass</code> flags</strong></summary>
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -88,7 +143,10 @@ python log-analysis/log_analysis.py run-all --out-dir analysis --dry-run
 | `--retries` | `5` | Max retries on transient errors |
 | `--sleep-seconds` | `3.0` | Base sleep between retries |
 
-### `run-pass`-only flags
+</details>
+
+<details>
+<summary><strong><code>run-pass</code>-only flags</strong></summary>
 
 | Flag | Description |
 |------|-------------|
@@ -97,24 +155,101 @@ python log-analysis/log_analysis.py run-all --out-dir analysis --dry-run
 | `--start-batch N` | Start from batch N (useful for resuming) |
 | `--end-batch N` | Stop after batch N |
 
-## Output structure
+</details>
+
+---
+
+## Output Structure
 
 ```
 analysis/
-  phase1/
-    aggregate.json     # all sessions merged
-    flat.jsonl         # one row per session log entry
-    flat.csv           # same as JSONL, in CSV format
-  pass1_prompt_audit/
-    batch_001.json
-    ...
-  pass2_cost/
-  pass3_skills/
-  pass4_rules/
-  final/
-    final_report.json  # top fixes, cost opportunities, skills, rules
+├── phase1/
+│   ├── aggregate.json        # All sessions merged
+│   ├── flat.jsonl            # One row per session log entry
+│   └── flat.csv              # Same as JSONL, in CSV format
+├── pass1_prompt_audit/
+│   └── batch_001.json ...
+├── pass2_cost/
+│   └── batch_001.json ...
+├── pass3_skills/
+│   └── batch_001.json ...
+├── pass4_rules/
+│   └── batch_001.json ...
+└── final/
+    └── final_report.json     # Top fixes, cost opportunities, skills, rules
 ```
 
-## Rate limits
+---
 
-The pipeline respects Gemini free-tier limits (15 RPM / 90K TPM) with a sliding-window rate limiter. Long runs throttle automatically — no extra configuration needed.
+## Rate Limits
+
+The pipeline respects Gemini free-tier limits (**15 RPM / 90K TPM**) with a sliding-window rate limiter. Long runs throttle automatically — no extra configuration needed.
+
+---
+
+## Architecture
+
+<details>
+<summary><strong>Pipeline overview</strong></summary>
+
+```
+work-logs/*.json
+       │
+       ▼
+   ┌────────┐
+   │ prepare │  Normalize & flatten into JSONL/CSV
+   └───┬────┘
+       │
+       ▼
+   ┌────────────────────────────────────────┐
+   │             run-all / run-pass         │
+   │                                        │
+   │  Pass 1 — Prompt audit                 │
+   │  Pass 2 — Cost / model optimization    │
+   │  Pass 3 — Skills clustering            │
+   │  Pass 4 — Rules extraction             │
+   └───┬────────────────────────────────────┘
+       │
+       ▼
+   ┌────────────┐
+   │ synthesize  │  Merge all pass outputs
+   └───┬────────┘
+       │
+       ▼
+  final_report.json
+```
+
+</details>
+
+<details>
+<summary><strong>What each pass does</strong></summary>
+
+| Pass | Purpose |
+|------|---------|
+| **Pass 1 — Prompt audit** | Finds recurring ambiguity patterns in how you prompt the AI |
+| **Pass 2 — Cost / model** | Flags tasks where a cheaper model tier likely would have sufficed |
+| **Pass 3 — Skills** | Clusters repeated tasks that could become reusable scripts or prompt templates |
+| **Pass 4 — Rules** | Extracts durable rules and recurring AI mistakes suitable for `.cursorrules` |
+| **Synthesize** | Merges all pass outputs into one prioritized `final_report.json` |
+
+</details>
+
+---
+
+## Contributing
+
+Contributions are welcome! To get started:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes (`git commit -m 'Add my feature'`)
+4. Push to the branch (`git push origin feature/my-feature`)
+5. Open a Pull Request
+
+Please make sure your changes work with `--dry-run` before submitting.
+
+---
+
+## License
+
+This project is provided as-is. See [LICENSE](../LICENSE) for details.
