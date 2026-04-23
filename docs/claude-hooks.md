@@ -1,24 +1,28 @@
-# Claude Code hooks
-
-## Overview
+# Claude Code Hooks
 
 This package wires **Claude Code lifecycle events** to small Node scripts (no dependencies) defined in [`.claude/settings.json`](../.claude/settings.json).
 
-Each hook:
-- receives a **JSON payload on stdin**
-- performs a focused task (log or notify)
-- exits (stdout is `{}` where required by Claude)
+Each hook receives a **JSON payload on stdin**, performs a focused task (log or notify), and exits (`stdout` is `{}` where required by Claude). Session logging shares logic with Cursor via [`session-tracker-utils.js`](../.claude/hooks/session-tracker-utils.js).
 
-Session logging shares logic with Cursor via [`session-tracker-utils.js`](../.claude/hooks/session-tracker-utils.js).
-
-This document explains **what these hooks do in this repo**. For full event contracts, refer to Claude’s official docs.
+This document explains **what these hooks do in this repo**. For full event contracts, refer to Claude's official docs.
 
 ---
 
-## Hooks in this package
+## Table of Contents
+
+- [Hooks Overview](#hooks-overview)
+- [Session Tracking](#session-tracking)
+- [Notifications](#notifications)
+- [Configuration](#configuration)
+- [Logging Model](#logging-model)
+- [Example](#example)
+
+---
+
+## Hooks Overview
 
 | Event | Script | What happens |
-|------|--------|-------------|
+|-------|--------|-------------|
 | `SessionStart` | `session-start.js` | Starts or resumes a session log entry |
 | `SessionEnd` | `session-end.js` | Finalizes the session and extracts `### Session Log` entries from the transcript |
 | `Stop` | `notify-stop.js` | Notifies when a task completes |
@@ -27,11 +31,10 @@ This document explains **what these hooks do in this repo**. For full event cont
 
 ---
 
-## Behavior
+## Session Tracking
 
-### Session tracking
+### `SessionStart`
 
-#### `SessionStart`
 Triggered when a session starts or resumes.
 
 - Creates or updates a session entry
@@ -39,50 +42,45 @@ Triggered when a session starts or resumes.
 - Adds a `resume_event` if the session was reopened
 - No-op if `session_tracking.enabled = false`
 
----
+### `SessionEnd`
 
-#### `SessionEnd`
 Triggered when a session ends.
 
 - Marks session as completed (`ended_at`, duration)
 - Reads the transcript via `transcript_path`
-- Extracts every `### Session Log` block from assistant turns into **`session_logs`** (each entry includes `captured_at` plus the six structured fields)
+- Extracts every `### Session Log` block from assistant turns into `session_logs` (each entry includes `captured_at` plus the six structured fields)
 
-There is **no** separate `capture-summary` hook for Claude Code in this repo; logging is finalized here unless you add one.
-
----
-
-### Notifications
-
-#### `Stop`
-Runs after a successful response.
-
-- Plays a sound
-- Sends a desktop notification
+> There is no separate `capture-summary` hook for Claude Code in this repo; logging is finalized here unless you add one.
 
 ---
 
-#### `StopFailure`
-Runs when a response fails.
+## Notifications
 
-- Plays failure sound
-- Sends error notification
+The `Stop`, `StopFailure`, and `PermissionRequest` hooks provide desktop notifications and optional sounds.
 
----
+| Event | Behavior |
+|-------|----------|
+| **Stop** | Plays a sound and sends a desktop notification |
+| **StopFailure** | Plays failure sound and sends error notification |
+| **PermissionRequest** | Notifies with context (command / reason if available) |
 
-#### `PermissionRequest`
-Runs when Claude asks for approval.
+<details>
+<summary><strong>Sound configuration</strong></summary>
 
-- Notifies with context (command / reason if available)
+- Set `sounds_directory` in `config.json` to your preferred audio files
+- Each notify hook maps to a different sound (success / failure / permission)
+- If not configured, default sounds are used or playback is skipped
 
-These hooks (`Stop`, `StopFailure`, `PermissionRequest`) provide desktop notifications and optional sounds.
+</details>
 
-- **Sounds are configurable** via `sounds_directory` in `config.json`
-- Each event can use a different sound
-- Notifications can be suppressed when a dev app (editor/terminal) is already focused
+<details>
+<summary><strong>Focus-aware behavior</strong></summary>
 
+Notifications can be suppressed when a dev app (editor/terminal) is already focused.
 
 > Cursor already provides built-in editor notifications, so this package does **not** duplicate that behavior there.
+
+</details>
 
 ---
 
@@ -91,47 +89,50 @@ These hooks (`Stop`, `StopFailure`, `PermissionRequest`) provide desktop notific
 ### Files
 
 | File | Purpose |
-|------|--------|
+|------|---------|
 | `config.json` | Enables logging, controls storage, sounds |
-| `settings.json` | Maps Claude events → hook scripts |
+| `settings.json` | Maps Claude events to hook scripts |
+
+### Session Tracking Options
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | — | Enables/disables logging |
+| `store_directory` | `work-logs/` | Where logs are stored |
+| `stale_session_days` | — | Auto-close inactive sessions |
+| `temp_session_id_log` | — | Optional debug logging for session IDs |
 
 ---
 
-### Sounds
-
-- Set `sounds_directory` to your preferred audio files
-- Each notify hook maps to a sound (success / failure / permission)
-- If not configured, default sounds are used or playback is skipped
-
-### Session tracking options that can be changed in config
-
-| Key | Meaning |
-|-----|--------|
-| `enabled` | Enables/disables logging |
-| `store_directory` | Where logs are stored (default `work-logs/`) |
-| `stale_session_days` | Auto-close inactive sessions |
-| `temp_session_id_log` | Optional debug logging for session IDs (see config comments if present) |
-
----
-
-## Logging model
+## Logging Model
 
 - Logs are written to `work-logs/` (configurable)
 - One JSON file per day
 - One entry per `session_id`
 
+<details>
+<summary><strong>Session entry fields</strong></summary>
+
 Each session includes:
-- timestamps (`started_at`, `ended_at`)
-- duration
-- project + branch
-- **`session_logs`**: array of `{ captured_at, user_intent, prompt_summary, provided_context, what_i_did, open_issues, next_best_step }` (fields present when parsed)
-- optional `resume_events`
+
+| Field | Description |
+|-------|-------------|
+| `started_at` / `ended_at` | ISO timestamps |
+| `duration_minutes` | Computed duration |
+| `project` / `branch` | Project context |
+| `session_logs` | Array of `{ captured_at, user_intent, prompt_summary, provided_context, what_i_did, open_issues, next_best_step }` |
+| `resume_events` | Timestamps of session resumes |
 
 Older files may still show legacy `summary_bullets`; new sessions use `session_logs` only.
+
+</details>
 
 ---
 
 ## Example
+
+<details>
+<summary><strong>Full session JSON</strong></summary>
 
 ```json
 {
@@ -159,3 +160,5 @@ Older files may still show legacy `summary_bullets`; new sessions use `session_l
   ]
 }
 ```
+
+</details>
